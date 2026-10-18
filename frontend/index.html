@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TutoMatch UPTC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <header class="bg-amber-500 text-white">
+    <div class="max-w-3xl mx-auto px-4 py-10 text-center">
+      <h1 class="text-3xl md:text-4xl font-bold">TutoMatch UPTC</h1>
+      <p class="mt-2 text-amber-50">Solicita una tutoría académica con tus compañeros y docentes.</p>
+    </div>
+  </header>
+
+  <main class="max-w-xl mx-auto px-4 py-8">
+    <form id="form-tutoria" novalidate class="bg-white shadow rounded-xl p-6 space-y-4">
+      <h2 class="text-xl font-semibold">Registro de tutoría</h2>
+
+      <div>
+        <label for="nombre" class="block text-sm font-medium mb-1">Nombre completo</label>
+        <input id="nombre" name="nombre" type="text" required maxlength="120"
+          class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+      </div>
+
+      <div>
+        <label for="email_corp" class="block text-sm font-medium mb-1">Correo institucional</label>
+        <input id="email_corp" name="email_corp" type="email" required placeholder="usuario@uptc.edu.co"
+          class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+      </div>
+
+      <div>
+        <label for="codigo_est" class="block text-sm font-medium mb-1">Código estudiantil (9 dígitos)</label>
+        <input id="codigo_est" name="codigo_est" type="text" inputmode="numeric" maxlength="9" required
+          class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+      </div>
+
+      <div>
+        <label for="materia_id" class="block text-sm font-medium mb-1">Materia</label>
+        <select id="materia_id" name="materia_id" required
+          class="w-full border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
+          <option value="">Cargando materias...</option>
+        </select>
+      </div>
+
+      <button id="btn-enviar" type="submit"
+        class="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition">
+        Enviar solicitud
+      </button>
+
+      <div id="mensaje" role="alert" class="hidden rounded-lg px-4 py-3 text-sm"></div>
+    </form>
+  </main>
+
+  <script>
+    // URL del backend: en local usa el mismo servidor; en GitHub Pages usa la URL de Render.
+    // >>> Cambia PRODUCCION por la URL real de tu servicio en Render (sin "/" final) <<<
+    const PRODUCCION = 'https://tutomatch-uptc.onrender.com';
+    const API_URL = ['localhost', '127.0.0.1'].includes(location.hostname) ? '' : PRODUCCION;
+
+    const form = document.getElementById('form-tutoria');
+    const msg = document.getElementById('mensaje');
+    const btn = document.getElementById('btn-enviar');
+    const selectMateria = document.getElementById('materia_id');
+
+    function mostrar(tipo, titulo, lista = []) {
+      const estilos = tipo === 'ok'
+        ? 'bg-green-100 text-green-800 border border-green-300'
+        : 'bg-red-100 text-red-800 border border-red-300';
+      msg.className = `rounded-lg px-4 py-3 text-sm ${estilos}`;
+      msg.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'font-medium';
+      p.textContent = titulo;           // textContent evita inyección HTML
+      msg.appendChild(p);
+      if (lista.length) {
+        const ul = document.createElement('ul');
+        ul.className = 'list-disc ml-5 mt-1';
+        lista.forEach((t) => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+        msg.appendChild(ul);
+      }
+    }
+
+    async function cargarMaterias() {
+      try {
+        const res = await fetch(`${API_URL}/api/materias`);
+        const materias = await res.json();
+        selectMateria.innerHTML = '<option value="">Selecciona una materia</option>';
+        materias.forEach((m) => selectMateria.add(new Option(m.nombre, m.id)));
+      } catch (err) {
+        console.error(err);
+        selectMateria.innerHTML = '<option value="">No se pudieron cargar</option>';
+        mostrar('error', 'No se pudo conectar con el servidor. Intenta más tarde.');
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const datos = {
+        nombre: form.nombre.value.trim(),
+        email_corp: form.email_corp.value.trim(),
+        codigo_est: form.codigo_est.value.trim(),
+        materia_id: form.materia_id.value,
+      };
+
+      // Validación rápida en el cliente (el servidor vuelve a validar)
+      const faltan = Object.entries(datos).filter(([, v]) => !v).map(([k]) => k);
+      if (faltan.length) return mostrar('error', 'Completa todos los campos.');
+
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      try {
+        const res = await fetch(`${API_URL}/api/tutorias`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(datos),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          mostrar('ok', `${json.mensaje} Radicado #${json.solicitud.id}`);
+          form.reset();
+        } else {
+          mostrar('error', json.mensaje || 'Error al enviar.', json.errores || []);
+        }
+      } catch (err) {
+        console.error(err);
+        mostrar('error', 'No se pudo conectar con el servidor.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar solicitud';
+      }
+    });
+
+    cargarMaterias();
+  </script>
+</body>
+</html>
